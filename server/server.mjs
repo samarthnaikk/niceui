@@ -54,7 +54,12 @@ const proxy = async (req, res) => {
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req,
       duplex: 'half',
     });
-    res.writeHead(upstream.status, Object.fromEntries(upstream.headers));
+    const out = Object.fromEntries(upstream.headers);
+    // Node's fetch decodes the body already; forwarding these makes the browser decode twice.
+    delete out['content-encoding'];
+    delete out['content-length'];
+    delete out['transfer-encoding'];
+    res.writeHead(upstream.status, out);
     if (upstream.body) {
       for await (const chunk of upstream.body) res.write(chunk);
     }
