@@ -26,9 +26,24 @@ function ticks(low: number, high: number): number[] {
 }
 
 const seriesOf = (value: unknown): Series[] => (Array.isArray(value) ? value : [])
+  .map((item) => (item && typeof item === 'object' && 'props' in item ? (item as any).props : item))
   .filter((item): item is Series => Boolean(item) && typeof item === 'object' && typeof (item as Series).name === 'string' && Array.isArray((item as Series).values));
 
 const pointsOf = (list: Series[]) => list.flatMap((s) => s.values.filter((v): v is number => typeof v === 'number'));
+
+function Legend({ list }: { list: Series[] }) {
+  if (list.length < 2) return null;
+  return (
+    <div className="legend">
+      {list.map((item, index) => (
+        <span key={`${item.name}-${index}`} className="legend-item">
+          <i style={{ background: seriesColor(index) }} />
+          {item.name}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function Frame({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
@@ -74,6 +89,8 @@ function ColumnChart({ value }: { value: Record<string, any> }) {
   const barW = Math.max(6, (group * 0.6) / list.length);
   const arrow = React.useId().replace(/:/g, '');
   return (
+    <>
+    <Legend list={list} />
     <svg viewBox={`0 0 ${W} ${height}`} className="chart" role="img">
       <defs>
         <marker id={`a${arrow}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
@@ -112,6 +129,7 @@ function ColumnChart({ value }: { value: Record<string, any> }) {
         );
       })}
     </svg>
+    </>
   );
 }
 
@@ -129,6 +147,8 @@ function Scatter({ value }: { value: Record<string, any> }) {
   const xOf = (v: number) => PAD.left + (W - PAD.left - PAD.right) * ((v - xMin) / (xMax - xMin || 1));
   const yOf = (v: number) => PAD.top + (height - PAD.top - PAD.bottom) * (1 - (v - low) / (high - low || 1));
   return (
+    <>
+    <Legend list={list} />
     <svg viewBox={`0 0 ${W} ${height}`} className="chart" role="img">
       <Axes low={low} high={high} height={height} />
       {list.map((s, si) => s.values.map((point, i) => (typeof point === 'number' && xs[i] !== undefined
@@ -137,6 +157,7 @@ function Scatter({ value }: { value: Record<string, any> }) {
       <text x={PAD.left} y={height - 8} className="axis-label">{withUnit(xMin, value.xUnit)}</text>
       <text x={W - PAD.right} y={height - 8} textAnchor="end" className="axis-label">{withUnit(xMax, value.xUnit)}</text>
     </svg>
+    </>
   );
 }
 
@@ -168,6 +189,8 @@ function Area({ value }: { value: Record<string, any> }) {
     return `${up} ${back} Z`;
   };
   return (
+    <>
+    <Legend list={list} />
     <svg viewBox={`0 0 ${W} ${height}`} className="chart" role="img">
       <Axes low={low} high={high} height={height} />
       {bands.map((band, i) => (
@@ -176,6 +199,7 @@ function Area({ value }: { value: Record<string, any> }) {
       <text x={PAD.left} y={height - 8} className="axis-label">{labels[0]}</text>
       <text x={W - PAD.right} y={height - 8} textAnchor="end" className="axis-label">{labels[labels.length - 1]}</text>
     </svg>
+    </>
   );
 }
 

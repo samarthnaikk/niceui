@@ -8,6 +8,23 @@ import { Node } from './blocks/render';
 type Msg = { id: string; role: 'user' | 'assistant'; text: string; tools?: string[] };
 type Model = { key: string; name: string; providerID: string; id: string };
 
+
+const DEMO_PROGRAM = `root = Stack([intro, flow, chart])
+intro = Card("How a request flows", [Text("The browser asks the server, the server asks the agent, and the agent writes the session to **SQLite**. Each hop adds latency, so the slowest hop sets the floor.")])
+flow = Card("Shape of the path", [Diagram([{id: "b", label: "Browser", x: 16, y: 30, tone: "info"}, {id: "s", label: "Server", x: 50, y: 30}, {id: "a", label: "Agent", x: 50, y: 72}, {id: "d", label: "SQLite", x: 84, y: 72, tone: "success"}], [{from: "b", to: "s", label: "SSE"}, {from: "s", to: "a", label: "prompt"}, {from: "a", to: "d", label: "write"}], 220)])
+chart = Card("Where the time goes", [ColumnChart(["browser", "server", "agent", "sqlite"], [Series("p50", [4, 6, 9, 3]), Series("p95", [9, 14, 22, 8])], "ms", false, "hop", "time")])
+`;
+
+function Demo() {
+  const source = 'A short walkthrough of a request.\n\n```openui-lang\n' + DEMO_PROGRAM + '```\n\nEach hop is measured in milliseconds.';
+  return (
+    <div className="app">
+      <header className="topbar"><div className="brand">niceui</div><span className="muted">block demo</span></header>
+      <main className="transcript"><article className="msg msg-assistant"><div className="reply"><Reply text={source} /></div></article></main>
+    </div>
+  );
+}
+
 const SESSION_KEY = 'niceui.session';
 const stripGuidance = (text: string) => (text.startsWith(GUIDANCE_PREFIX) ? text.slice(GUIDANCE_PREFIX.length) : text);
 
@@ -37,6 +54,7 @@ function Reply({ text }: { text: string }) {
 }
 
 export function App() {
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("demo")) return <Demo />;
   const [sessionID, setSessionID] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<Msg[]>([]);
   const [live, setLive] = React.useState('');
@@ -94,6 +112,10 @@ export function App() {
         const catalog = await client.model.list().catch(() => null);
         if (catalog) {
           setModels(catalog.data.map((m) => ({ key: `${m.providerID}/${m.modelID}`, name: m.name, providerID: m.providerID, id: m.modelID })));
+          if (!model) {
+            const fallback = await client.model.default({ location: { directory } }).catch(() => null);
+            if (fallback?.data) setModelKey(`${fallback.data.providerID}/${fallback.data.modelID}`);
+          }
         }
 
         (async () => {
