@@ -26,6 +26,15 @@ function Demo() {
 }
 
 const SESSION_KEY = 'niceui.session';
+const MODEL_KEY = 'niceui.model';
+const readModel = (): { providerID: string; id: string } | null => {
+  try {
+    const value = JSON.parse(localStorage.getItem(MODEL_KEY) ?? 'null');
+    return value && typeof value.providerID === 'string' && typeof value.id === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+};
 const stripGuidance = (text: string) => (text.startsWith(GUIDANCE_PREFIX) ? text.slice(GUIDANCE_PREFIX.length) : text);
 
 function Block({ source }: { source: string }) {
@@ -64,6 +73,8 @@ export function App() {
   const [error, setError] = React.useState<string | null>(null);
   const [models, setModels] = React.useState<Model[]>([]);
   const [modelKey, setModelKey] = React.useState('');
+  const [directory, setDirectory] = React.useState('');
+  const [teach, setTeach] = React.useState(() => localStorage.getItem('niceui.teach') !== 'off');
   const guided = React.useRef(new Set<string>());
   const liveText = React.useRef('');
   const bottom = React.useRef<HTMLDivElement>(null);
@@ -89,7 +100,10 @@ export function App() {
     (async () => {
       try {
         const { directory } = await info();
-        let id = localStorage.getItem(SESSION_KEY);
+        const sessionKey = `${SESSION_KEY}:${directory}`;
+        setDirectory(directory);
+        const stored = readModel();
+        let id = localStorage.getItem(sessionKey);
         if (id) {
           try {
             await client.session.get({ sessionID: id });
@@ -98,14 +112,17 @@ export function App() {
           }
         }
         if (!id) {
-          const created = await client.session.create({ location: { directory } });
+          const created = await client.session.create({
+            location: { directory },
+            ...(stored ? { model: stored } : {}),
+          });
           id = created.id;
-          localStorage.setItem(SESSION_KEY, id);
+          localStorage.setItem(sessionKey, id);
         }
         if (cancelled) return;
         setSessionID(id);
         const session = await client.session.get({ sessionID: id });
-        const model = (session as any).model;
+        const model = (session as any).model ?? stored;
         if (model) setModelKey(`${model.providerID}/${model.id}`);
         await load(id);
 
@@ -114,7 +131,11 @@ export function App() {
           setModels(catalog.data.map((m) => ({ key: `${m.providerID}/${m.modelID}`, name: m.name, providerID: m.providerID, id: m.modelID })));
           if (!model) {
             const fallback = await client.model.default({ location: { directory } }).catch(() => null);
-            if (fallback?.data) setModelKey(`${fallback.data.providerID}/${fallback.data.modelID}`);
+            if (fallback?.data) {
+              const choice = { providerID: fallback.data.providerID, id: fallback.data.modelID };
+              setModelKey(`${choice.providerID}/${choice.id}`);
+              localStorage.setItem(MODEL_KEY, JSON.stringify(choice));
+            }
           }
         }
 
@@ -171,22 +192,42 @@ export function App() {
     setMessages((current) => [...current, { id: `local-${Date.now()}`, role: 'user', text }]);
     const guidedBefore = guided.current.has(sessionID);
     try {
-      await client.session.prompt({ sessionID, text: guidedBefore ? text : `${GUIDANCE_PREFIX}${text}` });
-      guided.current.add(sessionID);
+      const chosen = models.find((item) => item.key === modelKey);
+      if (chosen) {
+        await client.session.switchModel({ sessionID, model: { providerID: chosen.providerID, id: chosen.id } });
+      }
+      await client.session.prompt({ sessionID, text: teach && !guidedBefore ? `${GUIDANCE_PREFIX}${text}` : text });
+      if (teach) guided.current.add(sessionID);
     } catch (cause) {
       setBusy(false);
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   };
 
+  const stop = async () => {
+    if (!sessionID) return;
+    try {
+      await client.session.interrupt({ sessionID });
+    } catch {
+      // nothing is running
+    }
+    liveText.current = '';
+    setLive('');
+    setBusy(false);
+    setActivity(null);
+    await load(sessionID).catch(() => undefined);
+  };
+
   const newChat = async () => {
     try {
       const current = sessionID;
       if (current) {
-        const session = await client.session.get({ sessionID: current });
-        const directory = (session.location as any)?.directory;
-        const created = await client.session.create({ location: directory ? { directory } : undefined });
-        localStorage.setItem(SESSION_KEY, created.id);
+        const chosen = models.find((item) => item.key === modelKey);
+        const created = await client.session.create({
+          location: directory ? { directory } : undefined,
+          ...(chosen ? { model: { providerID: chosen.providerID, id: chosen.id } } : {}),
+        });
+        localStorage.setItem(`${SESSION_KEY}:${directory}`, created.id);
         setSessionID(created.id);
         setMessages([]);
         setLive('');
@@ -201,7 +242,9 @@ export function App() {
   const changeModel = async (key: string) => {
     setModelKey(key);
     const model = models.find((item) => item.key === key);
-    if (!model || !sessionID) return;
+    if (!model) return;
+    localStorage.setItem(MODEL_KEY, JSON.stringify({ providerID: model.providerID, id: model.id }));
+    if (!sessionID) return;
     try {
       await client.session.switchModel({ sessionID, model: { providerID: model.providerID, id: model.id } });
     } catch (cause) {
@@ -219,6 +262,18 @@ export function App() {
               {models.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}
             </select>
           ) : <span className="model muted">{modelKey || 'loading model…'}</span>}
+          <button
+            className={teach ? 'ghost on' : 'ghost'}
+            aria-pressed={teach}
+            title={teach ? 'Teaching answers: explain simply, draw when it helps' : 'Plain answers'}
+            onClick={() => {
+              const next = !teach;
+              setTeach(next);
+              localStorage.setItem('niceui.teach', next ? 'on' : 'off');
+            }}
+          >
+            Teach
+          </button>
           <button className="ghost" onClick={() => void newChat()} disabled={!sessionID}>New chat</button>
         </div>
       </header>
@@ -269,9 +324,11 @@ export function App() {
             }
           }}
         />
-        <button className="send" onClick={() => void send()} disabled={busy || !draft.trim()}>
-          {busy ? '…' : 'Send'}
-        </button>
+        {busy ? (
+          <button className="stop" onClick={() => void stop()}>Stop</button>
+        ) : (
+          <button className="send" onClick={() => void send()} disabled={!draft.trim()}>Send</button>
+        )}
       </footer>
     </div>
   );

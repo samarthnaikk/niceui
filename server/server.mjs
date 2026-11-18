@@ -75,7 +75,7 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/app/info') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ directory: process.cwd() }));
+    res.end(JSON.stringify({ directory: process.env.NICEUI_DIR ?? process.cwd() }));
     return;
   }
 

@@ -206,3 +206,10 @@ button, textarea, select { font: inherit; color: inherit; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-item i { width: 8px; height: 8px; border-radius: 50%; }
+
+.ghost.on { background: var(--tile-2); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.stop {
+  height: 46px; padding: 0 18px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--fg); font-weight: 550;
+}
+.stop:hover { background: var(--tile); }

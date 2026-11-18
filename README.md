@@ -8,7 +8,8 @@ diagrams and LaTeX.
   `Heatmap`, `Timeline`, `Sparkline`)
 - Shape diagrams with labelled arrows (`Diagram`)
 - LaTeX through KaTeX (`Math`)
-- A teaching voice: the model explains simply and draws anything with shape, order or comparison
+- A **Teach** toggle (on by default): the model explains simply and draws anything with shape, order or comparison
+- **Stop** while it is answering, and a **New chat** that keeps your folder and model
 - Fenced ` ```openui-lang ` blocks, parsed with [OpenUI Lang](https://www.openui.com/docs/openui-lang)
 
 ## Requirements
@@ -32,7 +33,7 @@ Or use the launcher:
 
 ```bash
 ln -sf "$PWD/scripts/openc.sh" ~/.local/bin/openc
-openc                # starts the server and opens the browser
+openc                # opens this folder, starts the server if needed
 openc --stop
 ```
 
